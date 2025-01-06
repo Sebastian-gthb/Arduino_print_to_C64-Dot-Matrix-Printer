@@ -1,3 +1,14 @@
+/*
+This code is to comunicate from a Arduino (Atmega or Attiny) to an old C64 dot matrix printer over the serial bus of the C64.
+
+The idea: Instead of using read and write pins and attaching a 7506 (negator open collector) to the write pins... we simply use only one PIN which
+we configure as follows:
+- release = set PIN to input (and we will only read from it if it is released)
+- active low = set PIN to output low 
+So we reconfigure the PIN between input and output insted of writing 0 and 1 to the PIN. Thasts the magic of this code.
+
+Then i have written some functions for the Seikosha SP-180VC control codes. They use ESC/P codes, so hopefully you can used it on other printers.
+*/
 #include <Arduino.h>
 
 // Mapping the C64 serial port lines to Arduino's digital I/O pins
@@ -17,13 +28,6 @@ bool kontakt=true;
 
 // FUNCTIONS
 void(* resetFunc) (void) = 0;  // declare reset fuction at address 0
-
-/*
- !!!The idear: Instead of using read and write pins and attaching a 7506 (negator open collector) to the write pins... we simply use only one PIN which we configure as follows:
- - release = set PIN to input (and we will only read from it if it is released)
- - active low = set PIN to output low 
- So we reconfigure the PIN between input and output insted of writing 0 and 1 to the PIN. Thasts the magic of this code.
- */
 
 void cmb_bus_signal_release(int wire)
 {
@@ -55,10 +59,10 @@ void cbm_bus_init()
 void cmb_bus_send_byte(byte daten, bool eoi)
 {
 
-  //Stepp 1+2: Signalisiere "Ready to send" (CLK release) und warte auf "Ready for Data" (DATA release) vom Device
+  //Stepp 1+2: Signalize "Ready to send" (CLK release) and waiting for "Ready for Data" (DATA release) from Device
   waiting=true;
   i=0;
-  cmb_bus_signal_release(CBM_DATA);          // DATA muss hier eigentlich schon released sein, aber damit es nicht zu einem Programmfehler mit dem digitalRead kommt, wenn das nicht sichergestellt ist, setze ich es hier noch mal auf inaktiv/release
+  cmb_bus_signal_release(CBM_DATA);          // DATA is at this point already released, but to avoid a programming error with the digitalRead if this is not ensured, I set it to inactive/release here again
   cmb_bus_signal_release(CBM_CLK);
   do{
     kontakt = digitalRead(CBM_DATA);
@@ -158,7 +162,7 @@ void cmb_bus_send_byte(byte daten, bool eoi)
 
 
 //Seikosha SP-180VC control codes
-void cmb_prncmd_cr()      //Zeilenumbruch und Wagenruecklauf = CR
+void cmb_prncmd_cr()      // line feed and carriage return
 {
   cmb_bus_send_byte(13, false);   //Zeilenumbruch
 }
