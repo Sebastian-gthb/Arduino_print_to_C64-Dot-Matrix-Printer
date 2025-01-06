@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
-// Mapping of C64 serial port lines to Arduino's digital I/O pins
+// Mapping the C64 serial port lines to Arduino's digital I/O pins
+// to protect the Arduino you can connect 1k Ohm resistors between the pin and the serial lines (bus)
 int CBM_ATN    = 3;
 int CBM_RESET  = 6;
 int CBM_CLK    = 4;
@@ -10,7 +11,7 @@ int CBM_DATA   = 5;
 
 // VARIABLES
 int  i = 0;
-bool warte=true;
+bool waiting=true;
 bool kontakt=true;
 
 
@@ -18,26 +19,27 @@ bool kontakt=true;
 void(* resetFunc) (void) = 0;  // declare reset fuction at address 0
 
 /*
- !!!!Idee: anstatt read und write Pins zu nutzen und an die write Pins noch einen 7506 (negierer open collector) dran zu hängen... nutzen wir einfach nur jeweils einen PIN, den wir wie folgt konfirgurieren:
- - release = PIN auf Input setzen (und nur wenn er released ist werden wir auch davon lesen muessen)
- - aktive low = PIN auf Output low setzen
-
+ !!!The idear: Instead of using read and write pins and attaching a 7506 (negator open collector) to the write pins... we simply use only one PIN which we configure as follows:
+ - release = set PIN to input (and we will only read from it if it is released)
+ - active low = set PIN to output low 
+ So we reconfigure the PIN between input and output insted of writing 0 and 1 to the PIN. Thasts the magic of this code.
  */
-void cmb_bus_signal_release(int Leitung)
+
+void cmb_bus_signal_release(int wire)
 {
-  pinMode(Leitung, INPUT_PULLUP);
+  pinMode(wire, INPUT_PULLUP);
 }
 
-void cmb_bus_signal_active(int Leitung)
+void cmb_bus_signal_active(int wire)
 {
-  pinMode(Leitung, OUTPUT);
-  digitalWrite(Leitung, LOW);
+  pinMode(wire, OUTPUT);
+  digitalWrite(wire, LOW);
 }
 
-// initialisiere den seriellen Bus + die angeschlossenen Geraete
+// initialisie the serial bus + all attached devices
 void cbm_bus_init()
 {
-  // Signalpegel auf inaktiv setzen
+  // set the signal to inactive
   cmb_bus_signal_release(CBM_RESET);
   cmb_bus_signal_release(CBM_ATN);
   cmb_bus_signal_release(CBM_CLK);
@@ -54,14 +56,14 @@ void cmb_bus_send_byte(byte daten, bool eoi)
 {
 
   //Stepp 1+2: Signalisiere "Ready to send" (CLK release) und warte auf "Ready for Data" (DATA release) vom Device
-  warte=true;
+  waiting=true;
   i=0;
   cmb_bus_signal_release(CBM_DATA);          // DATA muss hier eigentlich schon released sein, aber damit es nicht zu einem Programmfehler mit dem digitalRead kommt, wenn das nicht sichergestellt ist, setze ich es hier noch mal auf inaktiv/release
   cmb_bus_signal_release(CBM_CLK);
   do{
     kontakt = digitalRead(CBM_DATA);
     if ( kontakt ) {
-      warte=false;
+      waiting=false;
     }
     else {
       i++;                                      //so lange DATA nicht high ist warten
@@ -70,13 +72,13 @@ void cmb_bus_send_byte(byte daten, bool eoi)
         resetFunc();                            //Arduino neustarten
       }
     }
-  }while(warte);
+  }while(waiting);
 
   
   //for the last Byte to send, a Intermission (EOI) is required. wait >200micsek and the device response or only of the response from the device after 200micek.
   if (eoi) {
     
-    warte=true;            //warte das das Device nach ca. 200miksk. DATA nach unten zieht
+    waiting=true;            //warte das das Device nach ca. 200miksk. DATA nach unten zieht
     i=0;
     do{
       kontakt = digitalRead(CBM_DATA);
@@ -88,16 +90,16 @@ void cmb_bus_send_byte(byte daten, bool eoi)
         }
       }
       else {
-        warte=false;
+        waiting=false;
       }
-    }while(warte);
+    }while(waiting);
     
-    warte=true;
+    waiting=true;
     i=0;
     do{
       kontakt = digitalRead(CBM_DATA);
       if ( kontakt ) {
-        warte=false;
+        waiting=false;
       }
       else {
         i++;                                      //so lange DATA nicht high ist warte 1000x
@@ -106,7 +108,7 @@ void cmb_bus_send_byte(byte daten, bool eoi)
           resetFunc();                            //Arduino neustarten
         }
       }
-    }while(warte);
+    }while(waiting);
   }
 
 
@@ -135,7 +137,7 @@ void cmb_bus_send_byte(byte daten, bool eoi)
   
 
   //warte auf Bestaetigung das das Byte vom Device empfangen wurde
-  warte=true;
+  waiting=true;
   i=0;
   cmb_bus_signal_release(CBM_DATA);
   do{
@@ -148,9 +150,9 @@ void cmb_bus_send_byte(byte daten, bool eoi)
       }
     }
     else {
-      warte=false;                                    //wird etwa nach XX loops high
+      waiting=false;                                    //wird etwa nach XX loops high
     }
-  }while(warte);
+  }while(waiting);
 }
 
 
@@ -336,7 +338,7 @@ void cbm_bus_command(int primcommand, int primaddress, int seccommand, int secad
   //call attention on the serial bus to prepare to send a command
 
   //Step 0: Call Attention und warte das alle Devices ueber DATA low melden das sie bereit sind
-  warte=true;
+  waiting=true;
   kontakt=false;
   i=0;
   cmb_bus_signal_release(CBM_DATA);          // DATA muss hier eigentlich schon released sein, aber damit es nicht zu einem Programmfehler mit dem digitalRead kommt, wenn das nicht sichergestellt ist, setze ich es hier noch mal auf inaktiv/release
@@ -353,9 +355,9 @@ void cbm_bus_command(int primcommand, int primaddress, int seccommand, int secad
       }
     }
     else {
-      warte=false;                              //wird etwa nach 4 loops low
+      waiting=false;                              //wird etwa nach 4 loops low
     }
-  }while(warte);
+  }while(waiting);
 
   delayMicroseconds(60); // nicht definiert, aber eine kleine Pause
 
