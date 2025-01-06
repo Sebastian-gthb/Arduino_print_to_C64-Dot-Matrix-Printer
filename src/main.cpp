@@ -23,18 +23,18 @@ int CBM_DATA   = 5;
 // VARIABLES
 int  i = 0;
 bool waiting=true;
-bool kontakt=true;
+bool contact=true;
 
 
 // FUNCTIONS
-void(* resetFunc) (void) = 0;  // declare reset fuction at address 0
+void(* resetFunc) (void) = 0;  // Declare reset fuction for the Arduino. If you call this it jump to address 0 and reboot.
 
-void cmb_bus_signal_release(int wire)
+void cmb_bus_signal_release(int wire)     // set the signal on the wire to release (inactive / logic=0 / read)
 {
   pinMode(wire, INPUT_PULLUP);
 }
 
-void cmb_bus_signal_active(int wire)
+void cmb_bus_signal_active(int wire)     // set the signal on the wire to active (logic=1)
 {
   pinMode(wire, OUTPUT);
   digitalWrite(wire, LOW);
@@ -65,15 +65,15 @@ void cmb_bus_send_byte(byte daten, bool eoi)
   cmb_bus_signal_release(CBM_DATA);          // DATA is at this point already released, but to avoid a programming error with the digitalRead if this is not ensured, I set it to inactive/release here again
   cmb_bus_signal_release(CBM_CLK);
   do{
-    kontakt = digitalRead(CBM_DATA);
-    if ( kontakt ) {
+    contact = digitalRead(CBM_DATA);
+    if ( contact ) {
       waiting=false;
     }
     else {
-      i++;                                      //so lange DATA nicht high ist warten
+      i++;                                      //waiting as long DATA is not high
       if (i > 99999) {
         Serial.println("Error Stepp 2: devices not ready for data (DAT=0) after 100.000 loops");
-        resetFunc();                            //Arduino neustarten
+        resetFunc();                            //Arduino reset ... sorry bad errorhandling
       }
     }
   }while(waiting);
@@ -82,15 +82,15 @@ void cmb_bus_send_byte(byte daten, bool eoi)
   //for the last Byte to send, a Intermission (EOI) is required. wait >200micsek and the device response or only of the response from the device after 200micek.
   if (eoi) {
     
-    waiting=true;            //warte das das Device nach ca. 200miksk. DATA nach unten zieht
+    waiting=true;            //waiting that the device pull down DATA after 200micsek
     i=0;
     do{
-      kontakt = digitalRead(CBM_DATA);
-      if ( kontakt ) {
-        i++;                                      //so lange DATA nicht high ist warte 1000x
+      contact = digitalRead(CBM_DATA);
+      if ( contact ) {
+        i++;                                      //waiting as long DATA is not high
         if (i > 999) {
           Serial.println("Error EOI: Device not responding EOI (DAT=0) after 1000 loops");
-          resetFunc();                            //Arduino neustarten
+          resetFunc();                            //Arduino reset ... sorry bad errorhandling
         }
       }
       else {
@@ -101,8 +101,8 @@ void cmb_bus_send_byte(byte daten, bool eoi)
     waiting=true;
     i=0;
     do{
-      kontakt = digitalRead(CBM_DATA);
-      if ( kontakt ) {
+      contact = digitalRead(CBM_DATA);
+      if ( contact ) {
         waiting=false;
       }
       else {
@@ -116,18 +116,18 @@ void cmb_bus_send_byte(byte daten, bool eoi)
   }
 
 
-  delayMicroseconds(40);   //kein Intermission (EOI) typ.40 mikrosek. time Try (0-60 typ.30) oder Tne (40-200)
+  delayMicroseconds(40);   //no Intermission (EOI) typ.40 micsec. time Try (0-60 typ.30) or Tne (40-200)
 
 
-  //sende Byte...
+  //sending Byte...
   cmb_bus_signal_active(CBM_CLK);
-  int pulsTs = 60;    //min 20, typ 70                          (war auf 60 gesetzt)
-  int pulsTv = 15;    //min 20, typ 20, wenn C64 Listener 60    (war auf 15 gesetzt)
+  int pulsTs = 60;    //min 20, typ 70
+  int pulsTv = 15;    //min 20, typ 20, if C64 Listener=60
 
   for (int i=0; i<8 ; i++) {
     delayMicroseconds(pulsTs);                        //wait time to set data (Ts)
     if (daten >> i & 0x01) {
-      cmb_bus_signal_release(CBM_DATA);               //Bits auf der Datenleitug sind negiert (nicht dokumentiert) also eine 1 ist "release" und nicht "active"!! (optimierung=eigentlich kann man die Zeile weglassen, da DATA immer released ist)
+      cmb_bus_signal_release(CBM_DATA);               //Bits on the data line are negated (not documented) so a 1 is “release” and not “active”!!! (optimization=actually you can omit the line, as DATA is always released)
     }
     else {
       cmb_bus_signal_active(CBM_DATA);
@@ -145,8 +145,8 @@ void cmb_bus_send_byte(byte daten, bool eoi)
   i=0;
   cmb_bus_signal_release(CBM_DATA);
   do{
-    kontakt = digitalRead(CBM_DATA);
-    if ( kontakt ) {
+    contact = digitalRead(CBM_DATA);
+    if ( contact ) {
       i++;                                      //so lange DATA high ist warten 100x
       if (i > 999) {                             //no ACK from Device (DAT=1) after 100 loops
         Serial.println("Error Stepp 4: no ACK from Device (DAT=1) after 1000 loops");             // no ACK from Device for the last Byte
@@ -166,147 +166,147 @@ void cmb_prncmd_cr()      // line feed and carriage return
 {
   cmb_bus_send_byte(13, false);   //Zeilenumbruch
 }
-void cmb_prncmd_italic(bool schalter)        //kursiv    (true/false)
+void cmb_prncmd_italic(bool state)        //kursiv    (true/false)
 {
   cmb_bus_send_byte(27, false);
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(52, false);     //an
   }
   else {
     cmb_bus_send_byte(53, false);     //aus
   }
 }
-void cmb_prncmd_underline(bool schalter)    //unterstrichen   (true/false)
+void cmb_prncmd_underline(bool state)    //unterstrichen   (true/false)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(45, false);
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(1,  false);     //an
   }
   else {
     cmb_bus_send_byte(0,  false);     //aus
   }
 }
-void cmb_prncmd_bold(bool schalter)         //fett   (true/false)
+void cmb_prncmd_bold(bool state)         //fett   (true/false)
 {
   cmb_bus_send_byte(27, false);
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(69, false);     //an
   }
   else {
     cmb_bus_send_byte(70, false);     //aus
   }
 }
-void cmb_prncmd_negative(bool schalter)     //Negativdruck    (true/false)
+void cmb_prncmd_negative(bool state)     //Negativdruck    (true/false)
 {
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(18, false);     //an
   }
   else {
     cmb_bus_send_byte(146,false);     //aus
   }
 }
-void cmb_prncmd_big(bool schalter)          //doppelte Breite  (true/false)
+void cmb_prncmd_big(bool state)          //doppelte Breite  (true/false)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(87, false);
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(1,  false);     //an
   }
   else {
     cmb_bus_send_byte(0,  false);     //aus  
   }
 }
-void cmb_prncmd_smallspacing(bool schalter)   //geringer Zeichenabstand  (true/false)
+void cmb_prncmd_smallspacing(bool state)   //geringer Zeichenabstand  (true/false)
 {
   cmb_bus_send_byte(27, false);
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(77, false);   //Zeichenabstand enger
   }
   else {
     cmb_bus_send_byte(80, false);   //Zeichenabstand normal
   }
 }
-void cmb_prncmd_superscript(byte schalter)       //hoch- oder tiefgestellt/superscript  (0=aus,1=hoch,2=tief)
+void cmb_prncmd_superscript(byte state)       //hoch- oder tiefgestellt/superscript  (0=aus,1=hoch,2=tief)
 {
   cmb_bus_send_byte(27, false);
-  if (schalter == 0) {
+  if (state == 0) {
     cmb_bus_send_byte(84, false);   //superscript aus
   }
-  else if (schalter == 1) {
+  else if (state == 1) {
     cmb_bus_send_byte(83, false);   //superscript oben
     cmb_bus_send_byte(0,  false);
   }
-  else if (schalter == 2) {  
+  else if (state == 2) {  
     cmb_bus_send_byte(83, false);   //superscript unten
     cmb_bus_send_byte(1,  false);
   }
 }
-void cmb_prncmd_graphic(bool schalter)         //Grafikdruck  (true/false)
+void cmb_prncmd_graphic(bool state)         //Grafikdruck  (true/false)
 {
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(8, false);    //an
   }
   else { 
     cmb_bus_send_byte(15, false);   //aus
   }
 }
-void cmb_prncmd_doubstrike(bool schalter)         //doppelter Anschlag  (true/false)
+void cmb_prncmd_doubstrike(bool state)         //doppelter Anschlag  (true/false)
 {
   cmb_bus_send_byte(27, false);
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(71, false);   //an
   }
   else { 
     cmb_bus_send_byte(72, false);   //aus
   }
 }
-void cmb_prncmd_nlq(bool schalter)              //hohe Qualitaet/Near Letter Quality (NLQ)    (true/false)
+void cmb_prncmd_nlq(bool state)              //hohe Qualitaet/Near Letter Quality (NLQ)    (true/false)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(120,false);
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(1,  false);   //an
   }
   else {
     cmb_bus_send_byte(0,  false);   //aus
   }
 }
-void cmb_prncmd_unidirectional(bool schalter)      //einheitliche Druckrichtung (von links nach rechts)    (true/false)
+void cmb_prncmd_unidirectional(bool state)      //einheitliche Druckrichtung (von links nach rechts)    (true/false)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(85, false);
-  if (schalter) {
+  if (state) {
     cmb_bus_send_byte(1,  false);   //Druckrichtung links nach rechts
   }
   else {
     cmb_bus_send_byte(0,  false);   //Druckrichtung hin und her (schneller)  
   }
 }
-void cmb_prncmd_leftstartposin(word wert)      //linke Druckstartposition in 1/60 Zoll    (word)
+void cmb_prncmd_leftstartposin(word value)      //linke Druckstartposition in 1/60 Zoll    (word)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(16, false);
-  cmb_bus_send_byte(highByte(wert), false);   //high byte
-  cmb_bus_send_byte(lowByte(wert),  false);   //low byte
+  cmb_bus_send_byte(highByte(value), false);   //high byte
+  cmb_bus_send_byte(lowByte(value),  false);   //low byte
 }
-void cmb_prncmd_leftmarin(byte wert)      //linke Rand in Anzahl Zeichen     (byte)
+void cmb_prncmd_leftmarin(byte value)      //linke Rand in Anzahl Zeichen     (byte)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(108, false);
-  cmb_bus_send_byte(wert, false);
+  cmb_bus_send_byte(value, false);
 }
-void cmb_prncmd_rightmarin(byte wert)      //rechter Rand in Anzahl Zeichen    (byte)
+void cmb_prncmd_rightmarin(byte value)      //rechter Rand in Anzahl Zeichen    (byte)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(81, false);
-  cmb_bus_send_byte(wert, false);
+  cmb_bus_send_byte(value, false);
 }
-void cmb_prncmd_linefeed(byte wert)      //Zeilenabstand in 1/216 Zoll (23 ist etwa normal)     (byte)
+void cmb_prncmd_linefeed(byte value)      //Zeilenabstand in 1/216 Zoll (23 ist etwa normal)     (byte)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(51, false);
-  cmb_bus_send_byte(wert, false);
+  cmb_bus_send_byte(value, false);
 }
 
 
@@ -343,15 +343,15 @@ void cbm_bus_command(int primcommand, int primaddress, int seccommand, int secad
 
   //Step 0: Call Attention und warte das alle Devices ueber DATA low melden das sie bereit sind
   waiting=true;
-  kontakt=false;
+  contact=false;
   i=0;
   cmb_bus_signal_release(CBM_DATA);          // DATA muss hier eigentlich schon released sein, aber damit es nicht zu einem Programmfehler mit dem digitalRead kommt, wenn das nicht sichergestellt ist, setze ich es hier noch mal auf inaktiv/release
   
   cmb_bus_signal_active(CBM_ATN);
   cmb_bus_signal_active(CBM_CLK);
   do{
-    kontakt = digitalRead(CBM_DATA);
-    if ( kontakt ) {
+    contact = digitalRead(CBM_DATA);
+    if ( contact ) {
       i++;                                      //so lange DATA nicht low-active ist warten 1000x
       if (i > 999) {
         Serial.println("Error Step 0: devices not in attention (DAT=1) after 1000 loops");
