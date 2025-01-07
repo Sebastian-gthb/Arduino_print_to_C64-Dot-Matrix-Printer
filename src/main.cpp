@@ -8,6 +8,13 @@ we configure as follows:
 So we reconfigure the PIN between input and output insted of writing 0 and 1 to the PIN. Thasts the magic of this code.
 
 Then i have written some functions for the Seikosha SP-180VC control codes. They use ESC/P codes, so hopefully you can used it on other printers.
+
+ToDo:
+      1.) Fimproving errorhandling (currently at least Arduino reset --> if problem occurs --> output message --> cb_bus_init --> jump out meaningfully, bevore open command)
+      2.) converting to the printer codepage (cbm_convert_code): Currently converts upper and lower case letters and numbers. Special characters are
+          a problem. We can use a 256 byte array to convert all characters like converted_byte = translation_byte_array[byte_to_convert]
+          The letter "A" has a byte value of 97 (decimal) and in the translation_byte_array at position 61 is the byte value of the
+          letter "A" from the printer code page = 61 (decimal)
 */
 #include <Arduino.h>
 
@@ -106,10 +113,10 @@ void cmb_bus_send_byte(byte daten, bool eoi)
         waiting=false;
       }
       else {
-        i++;                                      //so lange DATA nicht high ist warte 1000x
+        i++;                                      //waiting as long DATA is not high
         if (i > 999) {
           Serial.println("Error EOI: Device not ending EOI responding (DAT=1) after 1000 loops");
-          resetFunc();                            //Arduino neustarten
+          resetFunc();                            //Arduino reset ... sorry bad errorhandling
         }
       }
     }while(waiting);
@@ -127,7 +134,7 @@ void cmb_bus_send_byte(byte daten, bool eoi)
   for (int i=0; i<8 ; i++) {
     delayMicroseconds(pulsTs);                        //wait time to set data (Ts)
     if (daten >> i & 0x01) {
-      cmb_bus_signal_release(CBM_DATA);               //Bits on the data line are negated (not documented) so a 1 is “release” and not “active”!!! (optimization=actually you can omit the line, as DATA is always released)
+      cmb_bus_signal_release(CBM_DATA);               //bits on the data line are negated (not documented)  1 is “release” and not “active”!!! (optimization=actually you can omit the line, as DATA is always released)
     }
     else {
       cmb_bus_signal_active(CBM_DATA);
@@ -147,14 +154,14 @@ void cmb_bus_send_byte(byte daten, bool eoi)
   do{
     contact = digitalRead(CBM_DATA);
     if ( contact ) {
-      i++;                                      //so lange DATA high ist warten 100x
-      if (i > 999) {                             //no ACK from Device (DAT=1) after 100 loops
+      i++;                                      //waiting as long DATA is not high
+      if (i > 999) {                            //no ACK from Device (DAT=1) after 1000 loops
         Serial.println("Error Stepp 4: no ACK from Device (DAT=1) after 1000 loops");             // no ACK from Device for the last Byte
-        resetFunc();                            //Arduino neustarten
+        resetFunc();                            //Arduino reset ... sorry bad errorhandling
       }
     }
     else {
-      waiting=false;                                    //wird etwa nach XX loops high
+      waiting=false;
     }
   }while(waiting);
 }
@@ -162,96 +169,96 @@ void cmb_bus_send_byte(byte daten, bool eoi)
 
 
 //Seikosha SP-180VC control codes
-void cmb_prncmd_cr()      // line feed and carriage return
+void cmb_prncmd_cr()                      // line feed and carriage return
 {
-  cmb_bus_send_byte(13, false);   //Zeilenumbruch
+  cmb_bus_send_byte(13, false);
 }
-void cmb_prncmd_italic(bool state)        //kursiv    (true/false)
+void cmb_prncmd_italic(bool state)        // italic / kursiv    (true/false)
 {
   cmb_bus_send_byte(27, false);
   if (state) {
-    cmb_bus_send_byte(52, false);     //an
+    cmb_bus_send_byte(52, false);     //on
   }
   else {
-    cmb_bus_send_byte(53, false);     //aus
+    cmb_bus_send_byte(53, false);     //off
   }
 }
-void cmb_prncmd_underline(bool state)    //unterstrichen   (true/false)
+void cmb_prncmd_underline(bool state)    // underline   (true/false)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(45, false);
   if (state) {
-    cmb_bus_send_byte(1,  false);     //an
+    cmb_bus_send_byte(1,  false);     //on
   }
   else {
-    cmb_bus_send_byte(0,  false);     //aus
+    cmb_bus_send_byte(0,  false);     //off
   }
 }
-void cmb_prncmd_bold(bool state)         //fett   (true/false)
+void cmb_prncmd_bold(bool state)         // bold / fett   (true/false)
 {
   cmb_bus_send_byte(27, false);
   if (state) {
-    cmb_bus_send_byte(69, false);     //an
+    cmb_bus_send_byte(69, false);     //on
   }
   else {
-    cmb_bus_send_byte(70, false);     //aus
+    cmb_bus_send_byte(70, false);     //off
   }
 }
-void cmb_prncmd_negative(bool state)     //Negativdruck    (true/false)
+void cmb_prncmd_negative(bool state)     // negative    (true/false)
 {
   if (state) {
-    cmb_bus_send_byte(18, false);     //an
+    cmb_bus_send_byte(18, false);     //on
   }
   else {
-    cmb_bus_send_byte(146,false);     //aus
+    cmb_bus_send_byte(146,false);     //off
   }
 }
-void cmb_prncmd_big(bool state)          //doppelte Breite  (true/false)
+void cmb_prncmd_big(bool state)          // double width  (true/false)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(87, false);
   if (state) {
-    cmb_bus_send_byte(1,  false);     //an
+    cmb_bus_send_byte(1,  false);     //on
   }
   else {
-    cmb_bus_send_byte(0,  false);     //aus  
+    cmb_bus_send_byte(0,  false);     //off  
   }
 }
-void cmb_prncmd_smallspacing(bool state)   //geringer Zeichenabstand  (true/false)
+void cmb_prncmd_smallspacing(bool state)   // small spacing / geringer Zeichenabstand  (true/false)
 {
   cmb_bus_send_byte(27, false);
   if (state) {
-    cmb_bus_send_byte(77, false);   //Zeichenabstand enger
+    cmb_bus_send_byte(77, false);   //small
   }
   else {
-    cmb_bus_send_byte(80, false);   //Zeichenabstand normal
+    cmb_bus_send_byte(80, false);   //normal
   }
 }
-void cmb_prncmd_superscript(byte state)       //hoch- oder tiefgestellt/superscript  (0=aus,1=hoch,2=tief)
+void cmb_prncmd_superscript(byte state)       //superscript / hoch- oder tiefgestellt  (0=off,1=upper,2=lower)
 {
   cmb_bus_send_byte(27, false);
   if (state == 0) {
-    cmb_bus_send_byte(84, false);   //superscript aus
+    cmb_bus_send_byte(84, false);   //superscript on
   }
   else if (state == 1) {
-    cmb_bus_send_byte(83, false);   //superscript oben
+    cmb_bus_send_byte(83, false);   //superscript up
     cmb_bus_send_byte(0,  false);
   }
   else if (state == 2) {  
-    cmb_bus_send_byte(83, false);   //superscript unten
+    cmb_bus_send_byte(83, false);   //superscript down
     cmb_bus_send_byte(1,  false);
   }
 }
-void cmb_prncmd_graphic(bool state)         //Grafikdruck  (true/false)
+void cmb_prncmd_graphic(bool state)         // graphic printing mode  (true/false)
 {
   if (state) {
-    cmb_bus_send_byte(8, false);    //an
+    cmb_bus_send_byte(8, false);    //on
   }
   else { 
-    cmb_bus_send_byte(15, false);   //aus
+    cmb_bus_send_byte(15, false);   //off
   }
 }
-void cmb_prncmd_doubstrike(bool state)         //doppelter Anschlag  (true/false)
+void cmb_prncmd_doubstrike(bool state)         //doubble strike / doppelter Anschlag  (true/false)
 {
   cmb_bus_send_byte(27, false);
   if (state) {
@@ -261,48 +268,48 @@ void cmb_prncmd_doubstrike(bool state)         //doppelter Anschlag  (true/false
     cmb_bus_send_byte(72, false);   //aus
   }
 }
-void cmb_prncmd_nlq(bool state)              //hohe Qualitaet/Near Letter Quality (NLQ)    (true/false)
+void cmb_prncmd_nlq(bool state)              // Near Letter Quality (NLQ) / hohe Qualitaet    (true/false)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(120,false);
   if (state) {
-    cmb_bus_send_byte(1,  false);   //an
+    cmb_bus_send_byte(1,  false);   //on
   }
   else {
-    cmb_bus_send_byte(0,  false);   //aus
+    cmb_bus_send_byte(0,  false);   //off
   }
 }
-void cmb_prncmd_unidirectional(bool state)      //einheitliche Druckrichtung (von links nach rechts)    (true/false)
+void cmb_prncmd_unidirectional(bool state)      // unidirectional printing / einheitliche Druckrichtung (from left to right)    (true/false)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(85, false);
   if (state) {
-    cmb_bus_send_byte(1,  false);   //Druckrichtung links nach rechts
+    cmb_bus_send_byte(1,  false);   //printing direction from left to right
   }
   else {
-    cmb_bus_send_byte(0,  false);   //Druckrichtung hin und her (schneller)  
+    cmb_bus_send_byte(0,  false);   //printing direction alternating from left and right (faster)  
   }
 }
-void cmb_prncmd_leftstartposin(word value)      //linke Druckstartposition in 1/60 Zoll    (word)
+void cmb_prncmd_leftstartposin(word value)      //left printing starting position in 1/60 inch    (value as word)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(16, false);
   cmb_bus_send_byte(highByte(value), false);   //high byte
   cmb_bus_send_byte(lowByte(value),  false);   //low byte
 }
-void cmb_prncmd_leftmarin(byte value)      //linke Rand in Anzahl Zeichen     (byte)
+void cmb_prncmd_leftmarin(byte value)      // left margin in number of characters / linke Rand in Anzahl Zeichen     (value as byte)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(108, false);
   cmb_bus_send_byte(value, false);
 }
-void cmb_prncmd_rightmarin(byte value)      //rechter Rand in Anzahl Zeichen    (byte)
+void cmb_prncmd_rightmarin(byte value)      // right margin in number of characters / rechter Rand in Anzahl Zeichen    (value as byte)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(81, false);
   cmb_bus_send_byte(value, false);
 }
-void cmb_prncmd_linefeed(byte value)      //Zeilenabstand in 1/216 Zoll (23 ist etwa normal)     (byte)
+void cmb_prncmd_linefeed(byte value)      // line spacing in 1/216 inch / Zeilenabstand in 1/216 Zoll (23 is normal)     (value as byte)
 {
   cmb_bus_send_byte(27, false);
   cmb_bus_send_byte(51, false);
@@ -315,12 +322,12 @@ void cmb_bus_printtxt(const char* text)
   int laenge = strlen(text);
   for (int i=0; i<laenge; i++)
   {
-    cmb_bus_send_byte(cbm_switch_case(text[i]),false);
+    cmb_bus_send_byte(cbm_convert_code(text[i]),false);
   }
   //cmb_bus_send_byte(13, true);
 }
 
-int cbm_switch_case(char data)
+int cbm_convert_code(char data)      //convert ASCII letters to the code table of the printer
 {
   if (data >= 0x41 && data <= 0x5A)
   { // Convert from lower to upper (a->A)
@@ -345,37 +352,37 @@ void cbm_bus_command(int primcommand, int primaddress, int seccommand, int secad
   waiting=true;
   contact=false;
   i=0;
-  cmb_bus_signal_release(CBM_DATA);          // DATA muss hier eigentlich schon released sein, aber damit es nicht zu einem Programmfehler mit dem digitalRead kommt, wenn das nicht sichergestellt ist, setze ich es hier noch mal auf inaktiv/release
+  cmb_bus_signal_release(CBM_DATA);          // DATA is at this point already released, but to avoid a programming error with the digitalRead if this is not ensured, I set it to inactive/release here again
   
   cmb_bus_signal_active(CBM_ATN);
   cmb_bus_signal_active(CBM_CLK);
   do{
     contact = digitalRead(CBM_DATA);
     if ( contact ) {
-      i++;                                      //so lange DATA nicht low-active ist warten 1000x
+      i++;                                      //waiting as long DATA is not high
       if (i > 999) {
         Serial.println("Error Step 0: devices not in attention (DAT=1) after 1000 loops");
-        resetFunc();                            //Arduino neustarten
+        resetFunc();                            //Arduino reset ... sorry bad errorhandling
       }
     }
     else {
-      waiting=false;                              //wird etwa nach 4 loops low
+      waiting=false;                              //will normaly be low after 4 loops
     }
   }while(waiting);
 
-  delayMicroseconds(60); // nicht definiert, aber eine kleine Pause
+  delayMicroseconds(60); // not defined but a smal delay
 
 
 
   cmb_bus_send_byte(primcommand + primaddress, false);
 
   if (seccommand + secaddress > 0) {
-    delayMicroseconds(100);     //eine Pause zwischen den Bytes von 100miksek muss noch rein... wenn es mal gelungen ist ein Byte erfolgreicht zu senden
+    delayMicroseconds(100);
     cmb_bus_send_byte(seccommand + secaddress, false);
   }
 
 
-  //ATN wieder los lassen... fertig
+  //release ATN... all done!
   delayMicroseconds(10);       //Tr >20
   cmb_bus_signal_release(CBM_ATN);
 }
@@ -386,7 +393,6 @@ void cbm_bus_command(int primcommand, int primaddress, int seccommand, int secad
 // Arduino setup function is run once when the sketch starts.
 void setup()
 { 
-  // Set pins to either input or output.
 
   pinMode(PrintButton, INPUT_PULLUP);
 
@@ -397,7 +403,6 @@ void setup()
   // init serial bus and reset all devices
   cbm_bus_init();
 
-
 }  
   
   
@@ -405,13 +410,9 @@ void setup()
 void loop()
 {
 
-
-
   if (!digitalRead(PrintButton)) {
-    cbm_bus_command(0x20, 4, 0x60, 7);     //primcommand 0x20=open, primaddr 4=printer, seccommand 0x60, secaddr (0=grafik 7=busines)
+    cbm_bus_command(0x20, 4, 0x60, 7);     //primcommand 0x20=open, primaddr 4=printer, seccommand 0x60, secaddr (0=graphic 7=business)
 
-// ToDo:
-//       Fehlerhaendling verbessern (aktuell immerhin Arduino reset --> wenn Problem auftaucht --> Meldung ausgeben --> cb_bus_init --> Sinnvoll rausspringen, vor open command 
 
 
 
