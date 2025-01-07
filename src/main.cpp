@@ -316,17 +316,6 @@ void cmb_prncmd_linefeed(byte value)      // line spacing in 1/216 inch / Zeilen
   cmb_bus_send_byte(value, false);
 }
 
-
-void cmb_bus_printtxt(const char* text)
-{
-  int laenge = strlen(text);
-  for (int i=0; i<laenge; i++)
-  {
-    cmb_bus_send_byte(cbm_convert_code(text[i]),false);
-  }
-  //cmb_bus_send_byte(13, true);
-}
-
 int cbm_convert_code(char data)      //convert ASCII letters to the code table of the printer
 {
   if (data >= 0x41 && data <= 0x5A)
@@ -342,6 +331,17 @@ int cbm_convert_code(char data)      //convert ASCII letters to the code table o
     return data;
   }
 }
+
+void cmb_bus_printtxt(const char* text)
+{
+  int laenge = strlen(text);
+  for (int i=0; i<laenge; i++)
+  {
+    cmb_bus_send_byte(cbm_convert_code(text[i]),false);
+  }
+  //cmb_bus_send_byte(13, true);
+}
+
 
 void cbm_bus_command(int primcommand, int primaddress, int seccommand, int secaddress)
 {
