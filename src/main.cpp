@@ -427,6 +427,16 @@ void printing_graphic()
   cmb_prncmd_nlq(true);
   cmb_prncmd_graphic(true);
 
+
+/*
+Each byte >=128 represents a column of 7 pixel (yes not 8). Bit 0 to 6 are the pixel information. The upper dot is bit 0 and the bottom pixel is bit 6.
+Bit 7 (bytes <128) indicates whether the byte contains pixel information or specifies command. Byte 26 means, that the next byte indicates how often the next pixel byte will be printed.
+Example:
+201, 201, 201 <-- prints 3  columns with 3 pixels (upper, middle and bottom)
+ 26,  15, 201 <-- prints 15 columns with 3 pixels (upper, middle and bottom)
+
+Each row ends with byte 13 (decimal) = CR.
+*/
                     // 19x weiss,                                                                  ____4x 145       ___5x  137       ____5x 241
   byte testbild[] = {26, 19, 128, 192, 224, 176, 144, 152, 136, 140, 132, 132, 198, 162, 162, 162, 26, 4, 145, 153, 26, 5, 137, 153, 26, 5, 241, 226, 226, 226, 194, 196, 132, 132, 140, 136, 152, 144, 160, 224, 192, 13,
                      26, 14, 128, 224, 248, 252, 254, 199, 129, 26, 5, 128, 188, 194, 161, 144, 184, 248, 248, 252, 252, 250, 250, 250, 254, 254, 26, 4, 246, 255, 239, 239, 231, 175, 255, 143,143, 191, 191, 255, 254, 252, 248, 224, 128, 128, 128, 129, 130, 140, 152, 152, 136, 136, 136, 136, 132, 196, 198, 194, 226, 26, 4, 162, 146, 147, 145, 145, 145, 147, 210, 210, 26, 5, 226, 196, 196, 132, 132, 136, 136, 136, 144, 144, 160, 160, 192, 13,
